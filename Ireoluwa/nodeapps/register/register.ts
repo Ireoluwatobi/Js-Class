@@ -1,18 +1,15 @@
 import express, {Express ,Request, Response } from "express";
-import nodemailer, { SentMessageInfo } from "nodemailer";
+const mailFunction = require('./mailFunction')
 import fs from "fs";
 import cookieParser from "cookie-parser";
+let vis:number = 0
 const PORT: number = 8000;
-require('dotenv').config()
 
 
-var transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.USER,
-    pass: process.env.PASS
-  },
-});
+
+
+
+
 
 var app: Express = express();
 app.use(express.json());
@@ -24,25 +21,37 @@ app.get("/register", function (req: Request, res: Response) {
   .json({ result: "Register Here" });
 });
 
-app.get("/register/user/email", function (req: Request, res: Response) {
-  fs.readFile('newlyRegistered.txt',  'utf8', (err:any, data:any)=>{
-    if (err){
-      console.log(err);
-      return;
-    }
-    var hehe = JSON.parse(data)
+interface USERS {
+    users: {
+        User: string;
+        email: string;
+    }[];
+}
+app.get("/register/user/email",  function (req: Request, res: Response) {
+  fs.readFile(
+    'newlyRegistered.json', 'utf8',  function (err:any, data:any) {
+    if (err)throw err;
+    
+   
+    var regData : USERS = JSON.parse(data)
+
+    var newData: any[] = regData['users']
+    
+
     res.status(200)
-  .json({ result : hehe["email"] });
+  .json({ result : newData[vis].email });
   }) 
 });
 
 app.get("/register/user", function (req: Request, res: Response) {
+ 
   res.status(200)
   .json({ result : req.cookies['name_of_user'] });
 });
 
 
 app.post("/register", async function (req: Request, res: Response) {
+ 
   const { email, username } = req.body;
  
   if (!email || !username) {
@@ -52,37 +61,35 @@ app.post("/register", async function (req: Request, res: Response) {
   } else {
 
     res.cookie('name_of_user', `${username}`);
+                   fs.readFile(
+                      "newlyRegistered.json", 'utf8',  function (err: any, data:any) {
+                        if (err) throw err;
+                  
+                        if (data == '')
+                        {
+                          let oldData =  {
+                              "users": [
+                                { User : `${username}`, email : `${email}`}
+                              ]
+                            }
+                          fs.writeFile("newlyRegistered.json", JSON.stringify(oldData), (err:any)=>{
+                              if(err) throw err;
+                              console.log(`Users Saved!`);
+                            })
+                              }else{
+                        let myData = JSON.parse(data);
+                        myData['users'].push({ User : `${username}`, email : `${email}`})
 
-   const newData = JSON.stringify({User : `${username}`,
-                    email : `${email}`})
-    fs.writeFile(
-      "newlyRegistered.txt",
-      `${newData}`,
-      function (err: any) {
-        if (err) throw err;
-        console.log("User Saved!");
-      }
-    );
-
-
-    var mailOption = {
-      from: process.env.USER,
-      to: email,
-      subject: "Registration Confirmation",
-      text: `Welcome ${username} your email is ${email}`,
-    };
-
-    const ola = new Promise((resolve, reject) => {
-      transporter.sendMail(mailOption, function (error: Error | null, info: SentMessageInfo): void {
-        if (error) {
-         reject(error);
-        } else {
-          console.log("Email sent: " + info.response);
-          resolve(info);
-        }
-      });
-    });
-    console.log(await ola);
+                        fs.writeFile("newlyRegistered.json", JSON.stringify(myData), (err:any)=>{
+                          if(err) throw err;
+                          console.log(`Users Saved!`);
+                        } )
+                        vis++
+                              }
+                      })  
+                                   
+   await mailFunction.mailer(email, username)
+  
 
 
     res.status(200).json({
@@ -101,4 +108,7 @@ async function startApp() {
 }
 
 startApp();
+
+
+
 
